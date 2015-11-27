@@ -64,11 +64,11 @@ static int populate_user_groups(const char *user, gid_t **groups)
     *groups= loc_groups;
   }
 
+
   return ng;
 }
 
-
-static int user_in_group(const gid_t *user_groups, int ng,const char *group)
+static int user_in_group(pam_handle_t *pamh, const gid_t *user_groups, int ng,const char *group)
 {
   gid_t group_id;
 
@@ -78,13 +78,17 @@ static int user_in_group(const gid_t *user_groups, int ng,const char *group)
       return 0;
     group_id= g->gr_gid;
   }
-
-  for (; user_groups < user_groups + ng; user_groups++)
-  {
-    if (*user_groups == group_id)
-      return 1;
+    
+  int i;
+  for ( i = 0; i < ng; i++) {
+    //pam_syslog(pamh, LOG_DEBUG, "check user group %i against requested group %i", user_groups[i], group_id);
+           
+    if(group_id == user_groups[i]) {
+        return 1;
+    }     
   }
-
+  
+  //pam_syslog(pamh, LOG_DEBUG, "no group match found, user is not a member of group %i", group_id);
   return 0;
 }
 
@@ -127,19 +131,20 @@ int pam_sm_authenticate(pam_handle_t *pamh, int flags,
       s++;
     }
     from= s;
-    skip(isalnum(*s) || (*s == '_'));
+    skip(isalnum(*s) || (*s == '_') || (*s == '.') || (*s == '-'));
     end_from= s;
     skip(isspace(*s));
     if (end_from == from || *s++ != ':') goto syntax_error;
     skip(isspace(*s));
     to= s;
-    skip(isalnum(*s) || (*s == '_'));
+    skip(isalnum(*s) || (*s == '_') || (*s == '.') || (*s == '-'));
     end_to= s;
     if (end_to == to) goto syntax_error;
 
     *end_from= *end_to= 0;
+    //pam_syslog(pamh, LOG_DEBUG, "from %s", from);
     if (check_group ?
-          user_in_group(groups, n_groups, from) :
+          user_in_group(pamh, groups, n_groups, from) :
           (strcmp(username, from) == 0))
     {
       pam_err= pam_set_item(pamh, PAM_USER, to);
